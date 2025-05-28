@@ -2,11 +2,11 @@ import os
 import torch
 from torchvision.utils import save_image
 from torchvision import transforms
+from torch.utils.data import DataLoader
 from PIL import Image
 from io import BytesIO
+from app.utils.dataset import InMemoryDataset
 from app.models.stegastamp import StegaStampEncoder, StegaStampDecoder
-
-FINGERPRINT_SIZE = 100  # default, will be overwritten
 
 class FingerprintService:
     def __init__(self, encoder_path, decoder_path=None, device="cuda:0"):
@@ -14,17 +14,17 @@ class FingerprintService:
 
         # Load encoder model
         state_dict = torch.load(encoder_path, map_location=self.device)
-        global FINGERPRINT_SIZE
-        FINGERPRINT_SIZE = state_dict["secret_dense.weight"].shape[-1]
 
-        self.encoder = StegaStampEncoder(128, 3, fingerprint_size=FINGERPRINT_SIZE).to(self.device)
+        self.fingerprint_size = state_dict["secret_dense.weight"].shape[-1]
+
+        self.encoder = StegaStampEncoder(128, 3, fingerprint_size=self.fingerprint_size).to(self.device)
         self.encoder.load_state_dict(state_dict)
         self.encoder.eval()
 
         # Load decoder model (optional)
         self.decoder = None
         if decoder_path:
-            self.decoder = StegaStampDecoder(128, 3, fingerprint_size=FINGERPRINT_SIZE).to(self.device)
+            self.decoder = StegaStampDecoder(128, 3, fingerprint_size=self.fingerprint_size).to(self.device)
             self.decoder.load_state_dict(torch.load(decoder_path, map_location=self.device))
             self.decoder.eval()
 
@@ -34,14 +34,11 @@ class FingerprintService:
             transforms.ToTensor()
         ])
 
-    def embed(self, image_file: BytesIO, identical_fp=True):
+    def embed(self, image_file: BytesIO):
         image = Image.open(image_file).convert("RGB")
         tensor_img = self.transform(image).unsqueeze(0).to(self.device)
 
-        if identical_fp:
-            fingerprint = torch.randint(0, 2, (1, FINGERPRINT_SIZE), dtype=torch.float).to(self.device)
-        else:
-            fingerprint = torch.randint(0, 2, (1, FINGERPRINT_SIZE), dtype=torch.float).to(self.device)
+        fingerprint = torch.randint(0, 2, (1, self.fingerprint_size), dtype=torch.float).to(self.device)
 
         with torch.no_grad():
             fingerprinted_image = self.encoder(fingerprint, tensor_img)
@@ -67,3 +64,35 @@ class FingerprintService:
             binary_fp = (fingerprint > 0).long().squeeze().cpu().numpy()
 
         return "".join(map(str, binary_fp.tolist()))
+    
+    def embed_multiple(self, image_files: list[BytesIO], seed: int = 0):
+        torch.manual_seed(seed)
+        BATCH_SIZE = 64
+        dataset = InMemoryDataset(image_files, self.transform)
+        data_loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=False)
+
+        all_outputs = []
+        all_fingerprints = []
+
+        fingerprints = torch.randint(0, 2, (1, self.fingerprint_size), dtype=torch.float).to(self.device)
+        
+        for images, indices in data_loader:
+            images = images.to(self.device)
+
+            fingerprints = fingerprints.expand(images.size(0), -1)
+
+            with torch.no_grad():
+                fingerprinted_images = self.encoder(fingerprints, images)
+
+            for i in range(fingerprinted_images.size(0)):
+                buffer = BytesIO()
+                save_image(fingerprinted_images[i].cpu(), buffer, format="PNG")
+                buffer.seek(0)
+                all_outputs.append(buffer)
+                
+            all_fingerprints.extend([
+                 "".join(map(str, f.cpu().long().numpy().tolist()))
+                for f in fingerprints
+            ])
+
+        return all_outputs, all_fingerprints
