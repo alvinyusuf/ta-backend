@@ -27,15 +27,6 @@ async def decode_fingerprint(file: UploadFile = File(...)):
     fingerprint = fp_service.decode(BytesIO(image_bytes))
     return JSONResponse({"fingerprint": fingerprint})
 
-# @router.post("/embed-batch")
-# async def embed_fingerprint_batch(files: list[UploadFile] = File(...), seed: int = Form(...)):
-#     image_files = [BytesIO(await file.read()) for file in files]
-#     outputs, fingerprints = fp_service.embed_multiple(image_files, seed)
-#     return {
-#         "count": len(outputs),
-#         "fingerprints": fingerprints
-#     }
-
 @router.post("/embed-batch")
 async def embed_fingerprint_batch(file: UploadFile = File(...), seed: int = Form(...)):
     zip_file = BytesIO(await file.read())
