@@ -1,9 +1,7 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 import uuid
 import os
-from datetime import datetime
-from typing import Optional
 
 from app.models.stylegan import generate_image
 from app.schemas.request import GenerationRequest
@@ -14,15 +12,14 @@ router = APIRouter(
 )
 
 @router.post("/generate")
-async def generate(request: GenerationRequest, background_tasks: BackgroundTasks):
+async def generate(request: GenerationRequest):
     try:
         # Buat nama file unik
         filename = f"{uuid.uuid4()}.png"
         save_path = os.path.join("static", "images", filename)
         
         # Generate gambar di background task
-        background_tasks.add_task(
-            generate_image,
+        await generate_image(
             model_name=request.model_name,
             seed=request.seed,
             truncation_psi=request.truncation_psi,
