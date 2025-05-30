@@ -1,8 +1,13 @@
 from fastapi import APIRouter, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, JSONResponse
 from io import BytesIO
+import uuid
+import os
+import tempfile
+
 from app.services.fingerprinting import FingerprintService
 from app.utils.zip_processor import ZipImageProcessor
+from app.utils.response import success_response, error_response
 
 fp_service = FingerprintService(
     encoder_path="pretrained_models/128_encoder.pth",
@@ -15,31 +20,95 @@ router = APIRouter(
 )
 
 @router.post("/embed")
-async def embed_fingerprint(image: UploadFile = File(...)):
-    image_data = await image.read()
-    result = fp_service.embed(BytesIO(image_data))
+async def embed_fingerprint(image: UploadFile = File(...), seed: int = Form(...)):
+    try:
+        image_data = await image.read()
+        filename = f"{uuid.uuid4()}.png"
+        save_path = os.path.join("static", "images", "embed", filename)
 
-    return StreamingResponse(result, media_type="image/png")
+        result = fp_service.embed(BytesIO(image_data), seed=seed, save_path=save_path)
+
+        return success_response(
+            message="Fingerprint embedded successfully",
+            data={
+                "image_url": f"/static/images/embed/{filename}",
+                "filename": filename,
+                "fingerprint": result[1],
+                "request_id": str(uuid.uuid4()),
+            }
+        )
+
+    except Exception as e:
+        return error_response(
+            message="Error embedding fingerprint",
+            error=str(e),
+            status_code=500
+        )
 
 @router.post("/decode")
 async def decode_fingerprint(file: UploadFile = File(...)):
-    image_bytes = await file.read()
-    fingerprint = fp_service.decode(BytesIO(image_bytes))
-    return JSONResponse({"fingerprint": fingerprint})
+    try:
+        image_bytes = await file.read()
+        fingerprint = fp_service.decode(BytesIO(image_bytes))
+
+        return success_response(
+            message="Fingerprint decoded successfully",
+            data={
+                "fingerprint": fingerprint
+            }
+        )
+
+    except Exception as e:
+        return error_response(
+            message="Error decoding fingerprint",
+            error=str(e),
+            status_code=500
+        )
 
 @router.post("/embed-batch")
-async def embed_fingerprint_batch(file: UploadFile = File(...), seed: int = Form(...)):
-    zip_file = BytesIO(await file.read())
+async def embed_fingerprint_batch(
+    file: UploadFile = File(...),
+    seed: int = Form(...)
+):
+    try:
+        if not file.filename.lower().endswith('.zip'):
+            raise ValueError("File must be a zip archive containing images")
+        
+        request_id = str(uuid.uuid4())
+        save_path = os.path.join("static", "zip", "batch_fingerprints")
 
-    image_buffers, filenames = ZipImageProcessor.extract_images(zip_file)
-    outputs, fingerprints = fp_service.embed_multiple(image_buffers, seed)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            zip_file = BytesIO(await file.read())
+            image_paths, filenames = ZipImageProcessor.extract_images(zip_file, tmp_dir)
 
-    fp_dict = {name: fp for name, fp in zip(filenames, fingerprints)}
+            outputs, fingerprints, metrics = fp_service.embed_multiple(image_paths, seed)
+            fingerprint_dict = {
+                os.path.basename(filenames[i]): fp
+                for i,fp in enumerate(fingerprints)
+                if i < len(filenames)
+            }
 
-    result_zip = ZipImageProcessor.create_zip(outputs, filenames, fp_dict)
+            zip_filename = ZipImageProcessor.create_zip(
+                outputs,
+                filenames,
+                fingerprint_dict,
+                output_dir=save_path,
+                request_id=request_id
+            )
 
-    return StreamingResponse(
-        result_zip,
-        media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=fingerprinted_images.zip"}
-)
+        return success_response(
+            message="Batch fingerprint embedding completed successfully",
+            data={
+                "zip_url": f"/static/zip/batch_fingerprints/{zip_filename}",
+                "request_id": request_id,
+                "metrics": metrics,
+                "fingerprints": fingerprint_dict
+            }
+        )
+    
+    except Exception as e:
+        return error_response(
+            message="Error embedding fingerprints in batch",
+            error=str(e),
+            status_code=500
+        )

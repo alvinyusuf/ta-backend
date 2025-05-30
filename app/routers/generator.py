@@ -5,6 +5,7 @@ import os
 
 from app.models.stylegan import generate_image
 from app.schemas.request import GenerationRequest
+from app.utils.response import success_response, error_response
 
 router = APIRouter(
     prefix="/api/generator",
@@ -14,11 +15,9 @@ router = APIRouter(
 @router.post("/generate")
 async def generate(request: GenerationRequest):
     try:
-        # Buat nama file unik
         filename = f"{uuid.uuid4()}.png"
-        save_path = os.path.join("static", "images", filename)
+        save_path = os.path.join("static", "images", "GAN", filename)
         
-        # Generate gambar di background task
         await generate_image(
             model_name=request.model_name,
             seed=request.seed,
@@ -27,23 +26,43 @@ async def generate(request: GenerationRequest):
             noise_mode=request.noise_mode,
             save_path=save_path
         )
-        
-        return JSONResponse(
-            status_code=202,
-            content={
-                "message": "Gambar sedang digenerate",
-                "image_url": f"/static/images/{filename}",
+
+        return success_response(
+            message="Gambar berhasil digenerate",
+            data={
+                "image_url": f"/static/images/GAN/{filename}",
+                "filename": filename,
                 "request_id": str(uuid.uuid4()),
-                "seed": request.seed
             }
         )
+    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return error_response(
+            message="Terjadi kesalahan saat menggenerate gambar",
+            detail=str(e),
+            status_code=500
+        )
 
 @router.get("/models")
 async def list_models():
-    # Dapatkan daftar model StyleGAN2 yang tersedia
-    models_dir = "pretrained_models"
-    models = [f for f in os.listdir(models_dir) if f.endswith(".pkl")]
-    
-    return {"models": models}
+    try:
+        models_dir = "pretrained_models"
+        
+        if not os.path.exists(models_dir):
+            raise FileNotFoundError(
+                "Direktori model tidak ditemukan"
+            )
+        
+        models = [f for f in os.listdir(models_dir) if f.endswith(".pkl")]
+
+        return success_response(
+            message="Daftar model berhasil diambil",
+            data={"models": models}
+        )
+        
+    except Exception as e:
+        return error_response(
+            message="Terjadi kesalahan saat mengambil daftar model",
+            detail=str(e),
+            status_code=500
+        )
