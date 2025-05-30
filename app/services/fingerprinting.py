@@ -53,7 +53,7 @@ class FingerprintService:
 
                 detected_fingerprint = self.decoder(fingerprinted_image)
                 detected_fingerprint = (detected_fingerprint > 0).long()
-                bitwise_accuracy += (detected_fingerprint == fingerprint.long()).float().mean().item()
+                bitwise_accuracy = (detected_fingerprint == fingerprint.long()).float().mean().item()
 
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             save_image(fingerprinted_image.cpu(), save_path)
