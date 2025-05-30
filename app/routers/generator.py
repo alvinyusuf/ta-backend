@@ -22,8 +22,6 @@ async def generate(request: GenerationRequest):
             model_name=request.model_name,
             seed=request.seed,
             truncation_psi=request.truncation_psi,
-            class_idx=request.class_idx,
-            noise_mode=request.noise_mode,
             save_path=save_path
         )
 
