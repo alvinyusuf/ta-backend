@@ -26,14 +26,15 @@ async def embed_fingerprint(image: UploadFile = File(...), seed: int = Form(...)
         filename = f"{uuid.uuid4()}.png"
         save_path = os.path.join("static", "images", "embed", filename)
 
-        result = fp_service.embed(BytesIO(image_data), seed=seed, save_path=save_path)
+        _, fingerprint_str, metrics = fp_service.embed(BytesIO(image_data), seed=seed, save_path=save_path)
 
         return success_response(
             message="Fingerprint embedded successfully",
             data={
                 "image_url": f"/static/images/embed/{filename}",
                 "filename": filename,
-                "fingerprint": result[1],
+                "fingerprint": fingerprint_str,
+                "metrics": metrics,
                 "request_id": str(uuid.uuid4()),
             }
         )

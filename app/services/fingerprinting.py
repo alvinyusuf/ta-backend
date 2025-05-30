@@ -48,13 +48,25 @@ class FingerprintService:
 
             with torch.no_grad():
                 fingerprinted_image = self.encoder(fingerprint, tensor_img)
+                
+                mse_loss = F.mse_loss(fingerprinted_image, tensor_img, reduction='mean')
+
+                detected_fingerprint = self.decoder(fingerprinted_image)
+                detected_fingerprint = (detected_fingerprint > 0).long()
+                bitwise_accuracy += (detected_fingerprint == fingerprint.long()).float().mean().item()
 
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             save_image(fingerprinted_image.cpu(), save_path)
 
             list_fingerprint = fingerprint.squeeze().cpu().long().numpy().tolist()
+            fingerprint_str = "".join(map(str, list_fingerprint))
 
-            return save_path, "".join(map(str, list_fingerprint))
+            metrics = {
+                "mse_loss": mse_loss.item(),
+                "bitwise_accuracy": bitwise_accuracy
+            }
+
+            return save_path, fingerprint_str, metrics
         
         except Exception as e:
             raise ValueError(f"Terjadi kesalahan saat melakukan embed fingerprint: {str(e)}")
