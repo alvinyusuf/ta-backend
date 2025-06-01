@@ -85,7 +85,7 @@ class FingerprintService:
         except Exception as e:
             raise ValueError(f"Terjadi kesalahan saat mendekode fingerprint: {str(e)}")
     
-    def embed_multiple(
+    def embed_batch(
         self, image_paths: list[BytesIO],
         seed: int = 0
     ):

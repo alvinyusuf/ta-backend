@@ -47,9 +47,9 @@ async def embed_fingerprint(image: UploadFile = File(...), seed: int = Form(...)
         )
 
 @router.post("/decode")
-async def decode_fingerprint(file: UploadFile = File(...)):
+async def decode_fingerprint(image: UploadFile = File(...)):
     try:
-        image_bytes = await file.read()
+        image_bytes = await image.read()
         fingerprint = fp_service.decode(BytesIO(image_bytes))
 
         return success_response(
@@ -82,11 +82,10 @@ async def embed_fingerprint_batch(
             zip_file = BytesIO(await file.read())
             image_paths, filenames = ZipImageProcessor.extract_images(zip_file, tmp_dir)
 
-            outputs, fingerprints, metrics = fp_service.embed_multiple(image_paths, seed)
+            outputs, fingerprints, metrics = fp_service.embed_batch(image_paths, seed)
+
             fingerprint_dict = {
-                os.path.basename(filenames[i]): fp
-                for i,fp in enumerate(fingerprints)
-                if i < len(filenames)
+                "fingerprint": fingerprints[0],
             }
 
             zip_filename = ZipImageProcessor.create_zip(
@@ -100,7 +99,7 @@ async def embed_fingerprint_batch(
         return success_response(
             message="Batch fingerprint embedding completed successfully",
             data={
-                "zip_url": f"/static/zip/batch_fingerprints/{zip_filename}",
+                "zip_url": f"/{zip_filename}",
                 "request_id": request_id,
                 "metrics": metrics,
                 "fingerprints": fingerprint_dict
