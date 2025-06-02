@@ -21,7 +21,7 @@ async def generate(request: GenerationRequest):
         await generate_image(
             model_name=request.model_name,
             seed=request.seed,
-            truncation_psi=request.truncation_psi,
+            # truncation_psi=request.truncation_psi,
             save_path=save_path
         )
 
