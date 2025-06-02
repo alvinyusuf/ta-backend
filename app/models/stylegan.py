@@ -19,10 +19,11 @@ def load_model(model_path):
 async def generate_image(
     model_name: str, 
     seed: Optional[int] = None, 
-    truncation_psi: float = 0.7, 
+    # truncation_psi: float = 0.7, 
     save_path: str = "output.png"
 ):
     try:
+        truncation_psi = 0.7  # Default value, can be adjusted as needed
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
         model_path = os.path.join(MODELS_DIR, model_name)
