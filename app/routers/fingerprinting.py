@@ -8,6 +8,7 @@ import tempfile
 from app.services.fingerprinting import FingerprintService
 from app.utils.zip_processor import ZipImageProcessor
 from app.utils.response import success_response, error_response
+from app.utils.bitwise_accuracy import bitwise_accuracy
 
 fp_service = FingerprintService(
     encoder_path="pretrained_models/128_encoder.pth",
@@ -47,15 +48,24 @@ async def embed_fingerprint(image: UploadFile = File(...), seed: int = Form(...)
         )
 
 @router.post("/decode")
-async def decode_fingerprint(image: UploadFile = File(...)):
+# async def decode_fingerprint(image: UploadFile = File(...)):
+async def decode_fingerprint(image: UploadFile = File(...), input_fingerprint: str = Form(...)):
     try:
         image_bytes = await image.read()
         fingerprint = fp_service.decode(BytesIO(image_bytes))
 
+        # input_fingerprint = "01000100010000101110101111111100111010000011111011010101100000000110111101011101010100101111111111100111111110101101011010100110"
+
+        bitwise_accuracy_value = bitwise_accuracy(
+            logits_str=fingerprint,
+            target_str=input_fingerprint
+        )
+
         return success_response(
             message="Fingerprint decoded successfully",
             data={
-                "fingerprint": fingerprint
+                "fingerprint": fingerprint,
+                "bitwise_accuracy": bitwise_accuracy_value,
             }
         )
 
